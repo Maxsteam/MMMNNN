@@ -160,4 +160,145 @@ function match_plugin(plugin, plugin_name, msg)
         -- If plugin is for privileged users only
         if not warns_user_not_allowed(plugin, msg) then
           local result = plugin.run(msg, matches)
-         
+          if result then
+            send_large_msg(receiver, result)
+          end
+        end
+      end
+      -- One patterns matches
+      return
+    end
+  end
+end
+
+-- DEPRECATED, use send_large_msg(destination, text)
+function _send_msg(destination, text)
+  send_large_msg(destination, text)
+end
+
+-- Save the content of _config to config.lua
+function save_config( )
+  serialize_to_file(_config, './data/config.lua')
+  print ('saved config into ./data/config.lua')
+end
+
+-- Returns the config from config.lua file.
+-- If file doesn't exist, create it.
+function load_config( )
+  local f = io.open('./data/config.lua', "r")
+  -- If config.lua doesn't exist
+  if not f then
+    print ("Created new config file: data/config.lua")
+    create_config()
+  else
+    f:close()
+  end
+  local config = loadfile ("./data/config.lua")()
+  for v,user in pairs(config.sudo_users) do
+    print("Allowed user: " .. user)
+  end
+  return config
+end
+
+-- Create a basic config.json file and saves it.
+function create_config( )
+  -- A simple config with basic plugins and ourselves as privileged user
+  config = {
+    enabled_plugins = {
+      "banhammer",
+      "channels",
+      "greeter",
+      "groupmanager",
+      "help",
+      "id",
+      "invite",
+      "plugins",
+      "version"},
+    sudo_users = {174592839},
+    disabled_channels = {},
+    moderation = {data = 'data/moderation.json'}
+  }
+  serialize_to_file(config, './data/config.lua')
+  print ('saved config into ./data/config.lua')
+end
+
+function on_our_id (id)
+  our_id = id
+end
+
+function on_user_update (user, what)
+  --vardump (user)
+end
+
+function on_chat_update (chat, what)
+  --vardump (chat)
+end
+
+function on_secret_chat_update (schat, what)
+  --vardump (schat)
+end
+
+function on_get_difference_end ()
+end
+
+-- Enable plugins in config.json
+function load_plugins()
+  for k, v in pairs(_config.enabled_plugins) do
+    print("Loading plugin", v)
+
+    local ok, err =  pcall(function()
+      local t = loadfile("plugins/"..v..'.lua')()
+      plugins[v] = t
+    end)
+
+    if not ok then
+      print('\27[31mError loading plugin '..v..'\27[39m')
+      print('\27[31m'..err..'\27[39m')
+    end
+
+  end
+end
+
+-- custom add
+function load_data(filename)
+
+	local f = io.open(filename)
+	if not f then
+		return {}
+	end
+	local s = f:read('*all')
+	f:close()
+	local data = JSON.decode(s)
+
+	return data
+
+end
+
+function save_data(filename, data)
+
+	local s = JSON.encode(data)
+	local f = io.open(filename, 'w')
+	f:write(s)
+	f:close()
+
+end
+
+-- Call and postpone execution for cron plugins
+function cron_plugins()
+
+  for name, plugin in pairs(plugins) do
+    -- Only plugins with cron function
+    if plugin.cron ~= nil then
+      plugin.cron()
+    end
+  end
+
+  -- Called again in 5 mins
+  postpone (cron_plugins, false, 5*60.0)
+end
+
+-- Start and load values
+our_id = 0
+now = os.time()
+math.randomseed(now)
+started = false
